@@ -2,6 +2,8 @@
 const Express  =require('express');
 const cookie_parser  =require('cookie-parser');
 const authRoutes  =require('./routes/auth');
+const sessionRoutes  =require('./routes/session');
+
 const cors  =require('cors');
 var jwt = require('jsonwebtoken');
 
@@ -39,6 +41,7 @@ app.use((req, res, next) => {
 
 
 app.use('/api/auth/', authRoutes);
+app.use('/api/session/', sessionRoutes);
 
 
 app.get('/api/', (req, res) => {
