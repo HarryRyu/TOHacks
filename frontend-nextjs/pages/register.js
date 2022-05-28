@@ -8,7 +8,7 @@ import { useRouter } from 'next/router';
 
 const Register = () => {
     const [waitingForServerResponse, setWaitingForServerResponse] = useState(false)
-const router = useRouter();
+    const router = useRouter();
     const { register, handleSubmit, watch, formState: { errors } } = useForm();
     const onSubmit = async data => {
         try {

@@ -4,10 +4,12 @@ import FormField from '../components/FormField'
 import axios from 'axios';
 import { LOGIN_URL } from '../apiEndpoints';
 import { toast } from 'react-toastify';
+import { useRouter } from 'next/router';
 
 
 const Login = () => {
     const [waitingForServerResponse, setWaitingForServerResponse] = useState(false)
+    const router = useRouter();
 
     const { register, handleSubmit, watch, formState: { errors } } = useForm();
     const onSubmit = async data => {
