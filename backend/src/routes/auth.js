@@ -54,12 +54,12 @@ app.post('/register/', async (req, res, next) => {
         //   insert the user into Users table in database
         let data = await db.query(
             `INSERT INTO users(
-                userId,
-                firstName,
-                lastName,
+                user_id,
+                first_name,
+                last_name,
                 email,
-                createdAt,
-                hashedPassword)
+                created_at,
+                hashed_password)
             VALUES($1, $2, $3, $4, $5, $6) RETURNING *`,
             [
                 uuid.v4(),
@@ -71,7 +71,7 @@ app.post('/register/', async (req, res, next) => {
             ]
         )
 
-        let { hashedpassword, ...userData } = data.rows[0];
+        let { hashed_password, ...userData } = data.rows[0];
 
         var token = jwt.sign(userData, process.env.JWT_SECRET);
         res.cookie('jwt_token',token, { maxAge: 1000 * 60 * 60 * 24 * 7, httpOnly: true });
@@ -111,12 +111,12 @@ app.post('/login/', async (req, res, next) => {
         }
         const isPassSame = await bcrypt.compare(
             value.password,
-            instance.rows[0].hashedpassword
+            instance.rows[0].hashed_password
         )
         if (!isPassSame) {
             throw Error('Invalid credentials');
         }
-        let { hashedpassword, ...userData } = instance.rows[0];
+        let { hashed_password, ...userData } = instance.rows[0];
 
         var token = jwt.sign(userData, process.env.JWT_SECRET);
         res.cookie('jwt_token',token, { maxAge: 1000 * 60 * 60 * 24 * 7, httpOnly: true });

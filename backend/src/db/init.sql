@@ -1,9 +1,9 @@
 
 create table users(
-    userId UUID,
-    firstName string,
-    lastName string,
+    user_id UUID,
+    first_name string,
+    last_name string,
     email string,
-    createdAt timestamp,
-    hashedPassword string
+    created_at timestamp,
+    hashed_password string
 )

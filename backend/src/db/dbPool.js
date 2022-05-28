@@ -12,3 +12,5 @@ const clientInfo = {
 const pool = new Pool(clientInfo)
 
 module.exports = pool;
+
+
