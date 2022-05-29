@@ -4,7 +4,6 @@ const { v4: uuidv4 } = require("uuid");
 const AccessToken = require("twilio").jwt.AccessToken;
 const VideoGrant = AccessToken.VideoGrant;
 
-
 // create the twilioClient
 const twilioClient = require("twilio")(
     process.env.TWILIO_API_KEY_SID,

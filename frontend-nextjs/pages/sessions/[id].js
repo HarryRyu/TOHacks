@@ -141,8 +141,9 @@ const SessionDash = () => {
 
     const handleNewChallenge = () => {
         toast('Select a pose with which you want to challenge your buddies. 😎 Get ready... Clicking snapshot in 7 seconds.', {
-            autoClose: 7000,
+            autoClose: 1000,
             onClose: () => {
+                takepicture()
                 // TODO: Add Challenge
                 // let canvas = document.getElementById('screenshot-canvas');
 
@@ -159,8 +160,29 @@ const SessionDash = () => {
         })
     }
 
+    function takepicture() {
+
+        var video = document.getElementsByTagName('video');
+        var canvas = document.getElementById('canvas');
+        var width = 100
+        var height = 100
+        var context = canvas.getContext('2d');
+        console.log(video)
+        if (width && height) {
+          canvas.width = width;
+          canvas.height = height;
+          context.drawImage(video[0], 0, 0, width, height);
+    
+          var data = canvas.toDataURL('image/png');
+          photo.setAttribute('src', data);
+        } else {
+          clearphoto();
+        }
+      }
+
 
     return (
+        
         <div className={styles['session_container']} style={{ color: 'white' }}>
             <>
 
@@ -203,6 +225,12 @@ const SessionDash = () => {
 
                             </div>
                         </div>
+
+                        <canvas id="canvas" style={{width:'400px', height:'300px', backgroundColor: 'black', position: 'absolute', borderRadius:'15px', marginLeft: '30px', marginTop:'13%'}}>
+                            <div className="output">
+                                <img id="photo" alt="The screen capture will appear in this box."></img>
+                            </div>
+                        </canvas>
                         <div className={styles['options']}>
                             <div className={styles['options__left']}>
                                 <div id="stopVideo" className={styles['options__button']}>
