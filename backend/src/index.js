@@ -1,6 +1,8 @@
 
 const Express = require('express');
 const cookie_parser = require('cookie-parser');
+const cookie = require('cookie');
+
 const authRoutes = require('./routes/auth');
 const sessionRoutes = require('./routes/session');
 const { ExpressPeerServer } = require("peer");
@@ -14,7 +16,8 @@ const app = Express()
 
 
 
-const dotenv = require('dotenv')
+const dotenv = require('dotenv');
+const { verifyToken } = require('./auth/helpers');
 
 dotenv.config()
 
@@ -35,6 +38,7 @@ app.use(Express.json())
 
 // custom middleware to take the jsonwebtoken if any and build the user object
 app.use((req, res, next) => {
+    console.log('mnmm', req.cookies)
     if (req.cookies.jwt_token) {
         const user = jwt.decode(req.cookies.jwt_token)
         req.user = user
@@ -43,6 +47,7 @@ app.use((req, res, next) => {
     }
     next()
 })
+
 
 
 app.use('/api/auth/', authRoutes);
@@ -56,6 +61,9 @@ app.get('/api/', (req, res) => {
         'userDetails': req.user
     })
 })
+
+
+
 
 /**
  * Not Found Handler 
@@ -75,28 +83,96 @@ const io = require("socket.io")(server, {
     allowEIO3: true,
     debug: true,
     cors: {
-        origin: '*',
+        origin: process.env.CLIENT_URL ?? '/',
+        credentials: true,
     }
 });
+
+const usersBySession = {};
+const sessionBySocket = {}
+
 io.on("connection", (socket) => {
-    // console.log(socket)
-    socket.on("join-room", (roomId, userId, userName) => {
-      socket.join(roomId);
-      console.log(roomId, userId)
-    //   socket.to(roomId).broadcast.emit("user-connected", userId);
-    //   socket.on("message", (message) => {
-    //     io.to(roomId).emit("createMessage", message, userName);
-    //   });
+
+    // if (!users[socket.id]) {
+    //     users[socket.id] = socket.id;
+    // }
+
+    socket.on("join-session", (payload) => {
+        const { sessionId } = payload;
+        if (socket.handshake.headers.cookie) {
+            const jwt_token = cookie.parse(socket.handshake.headers.cookie).jwt_token;
+            const user = jwt.decode(jwt_token)
+            if(!user) throw new Error('jwt token expired')
+            if (!usersBySession[sessionId]) usersBySession[sessionId] = [];
+            user['socket_id']=socket.id
+
+            // TODO: send the details of currently connected clients to the new user
+            socket.emit('start-session', usersBySession[sessionId])
+
+            console.log('adding user', user)
+
+            usersBySession[sessionId].push(user)
+            sessionBySocket[socket.id] = sessionId
+
+            socket.on('disconnect', () => {
+                console.log('disconnect', socket)
+                delete sessionBySocket[socket.id];
+                usersBySession[sessionId] = usersBySession[sessionId].filter(e => e.socket_id !== socket.id);
+
+                // TODO: sending to all connected clients with [sessionId] about disconnect of user
+                for(const subscribedUser of usersBySession[sessionId]){
+                    io.to(subscribedUser.socket_id).emit('user-left', user)
+                }
+            })
+
+            socket.on('client-to-server-connect-with-user', (data) => {
+                // console.log('requ', data, socket.id)
+                io.to(data.socketIdOfUserToCall).emit('server-to-client-requesting-connection', {signal: data.signal, from: data.socketIdOfUserToCall, requestorSocketId: socket.id});
+            })
+
+            socket.on('client-to-server-connection-accepted', (data) => {
+                io.to(data.requestorSocketId).emit('server-to-client-connection-accepted', data.signal);
+            })
+
+
+            // TODO: sending to all connected clients with [sessionId] about the new user
+            for(const subscribedUser of usersBySession[sessionId]){
+                // since we've already pushed the new user to array; need to make a check
+                if(subscribedUser.socket_id !== socket.id) io.to(subscribedUser.socket_id).emit('new-user', user)
+            }
+            // io.sockets.emit("allUsers", users);
+        } else {
+            // TODO: Invalid request by user
+            throw new Error('Invalid request')
+        }
     });
-  });
+
+    // socket.emit("yourID", socket.id);
+
+    
 
 
 
-const peerServer = ExpressPeerServer(server, {
-    debug: true,
+    // socket.on("callUser", (data) => {
+    //     io.to(data.userToCall).emit('hey', { signal: data.signalData, from: data.from });
+    // })
+
+    // socket.on("acceptCall", (data) => {
+    //     io.to(data.to).emit('callAccepted', data.signal);
+    // })
+
+
+
+
+    // socket.on("join-room", (roomId, userId, userName) => {
+    //     socket.join(roomId);
+    //     console.log(roomId, userId)
+    //     //   socket.to(roomId).broadcast.emit("user-connected", userId);
+    //     //   socket.on("message", (message) => {
+    //     //     io.to(roomId).emit("createMessage", message, userName);
+    //     //   });
+    // });
 });
-
-app.use("/peerjs", peerServer);
 
 
 

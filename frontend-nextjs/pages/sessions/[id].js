@@ -1,9 +1,9 @@
 import { useRouter } from "next/router"
-import { createRef, useEffect, useState } from "react"
+import { createRef, useEffect, useRef, useState } from "react"
 import useScript from "../../hooks/useScript"
 import styles from '../../styles/sessions[id].module.css'
-
-
+import SimplePeer from "simple-peer"
+import io from "socket.io-client"
 
 function addVideoStream(videoGrid, video, stream) {
     video.srcObject = stream;
@@ -15,35 +15,156 @@ function addVideoStream(videoGrid, video, stream) {
 
 
 const SessionDash = () => {
-    const status = useScript('https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js')
-    const peerStatus = useScript('https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js')
+    // const status = useScript('https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js')
+    // const peerStatus = useScript('https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js')
     const fontAwesomeStatus = useScript('https://kit.fontawesome.com/c939d0e917.js')
     const [peerInstance, setPeerInstance] = useState(null)
+    const [mySocketId, setMySocketId] = useState('null')
+
     const [socketInstance, setSocketInstance] = useState(null)
+    const [stream, setStream] = useState();
+    const userVideo = useRef();
+    const partnerVideos = useRef({});
+    const partnerVideo = useRef();
+
+    const [users, setUsers] = useState([]);
+
+    const socket = useRef();
+
 
     const router = useRouter();
 
-    const { id:roomId } = router.query
+    const { id: roomId } = router.query
+
+
+    useEffect(() => {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+            setStream(stream);
+            if (userVideo.current) {
+                userVideo.current.srcObject = stream;
+            }
+        })
+
+    }, []);
 
 
     const initPeer = () => {
 
-        const socket = io("127.0.0.1:8080", {transports: ['websocket']});
-        setSocketInstance(socket)
+        socket.current = io("localhost:8080", { transports: ['websocket'], withCredentials: true, });
 
-        var peer = new Peer(undefined, {
-            path: "peerjs",
-            host: "127.0.0.1",
-            port: "8080",
+
+        socket.current.on("connect", (data) => {
+            socket.current.emit('join-session', { sessionId: roomId });
+            socket.current.on('start-session', (payload) => {
+                setUsers(payload)
+                for (const user of payload) {
+                    connectPeer(user.socket_id)
+                }
+            })
+
+            socket.current.on('new-user', (payload) => {
+                console.log('new', payload.socket_id)
+                setUsers([...users, payload])
+            })
+
+            socket.current.on('user-left', (payload) => {
+                console.log('left', payload.socket_id)
+                delete partnerVideo[payload.socket_id]
+                setUsers(users.filter(e => e.socket_id !== payload.socket_id))
+            })
+            // setReceivingCall(true);
+
+            // setCaller(data.from);
+            // setCallerSignal(data.signal);
+
+            // acceptCall(data.signal, data.caller)
+
+            socket.current.on('server-to-client-requesting-connection', (payload) => {
+                console.log(payload.requestorSocketId, ' is requesting', payload)
+                const peer = new SimplePeer({
+                    initiator: false,
+                    trickle: false,
+                    stream: stream,
+                });
+                peer.on("signal", data => {
+                    //   accept the connection
+                    socket.current.emit("client-to-server-connection-accepted", { signal: data, requestorSocketId: payload.requestorSocketId })
+                })
+
+                peer.on("stream", stream => {
+                    console.log('adding stream...')
+                    if (partnerVideo[payload.requestorSocketId]) {
+                        partnerVideo[payload.requestorSocketId].current.srcObject = stream;
+                    }
+                });
+
+                peer.signal(payload.signal);
+            })
+        })
+
+
+    }
+
+
+    const connectPeer = (peerSocketId) => {
+
+        // setSocketInstance(socket)
+
+        const peer = new SimplePeer({
+            initiator: true,
+            trickle: false,
+            config: {
+
+                iceServers: [
+                    {
+                        urls: "stun:numb.viagenie.ca",
+                        username: "sultan1640@gmail.com",
+                        credential: "98376683"
+                    },
+                    {
+                        urls: "turn:numb.viagenie.ca",
+                        username: "sultan1640@gmail.com",
+                        credential: "98376683"
+                    }
+                ]
+            },
+            stream: stream,
         });
-        setPeerInstance(() => peer)
 
-        console.log(peer)
 
-        peer.on("open", (tmp_uid) => {
-            socket.emit("join-room", roomId, tmp_uid);
+
+        peer.on("signal", data => {
+            console.log('requesting connection to ', peerSocketId)
+            socket.current.emit("client-to-server-connect-with-user", { socketIdOfUserToCall: peerSocketId, signal: data })
+        })
+
+        peer.on("stream", stream => {
+            console.log('adding 2 stream...')
+
+            if (partnerVideo[peerSocketId]) {
+                partnerVideo[peerSocketId].current.srcObject = stream;
+            }
         });
-        
+
+        socket.current.on("server-to-client-connection-accepted", signal => {
+            console.log('accepted connection', signal)
+            peer.signal(signal);
+        })
+
+
+        // peer.on("signal", data => {
+        //     socket.current.emit("connect-with-user", { userToCall: id, signalData: data, from: yourID })
+        // })
+
+
+        // peer.on("stream", stream => {
+        //     if (partnerVideo[peerSocketId]) {
+        //         partnerVideo[peerSocketId].current.srcObject = stream;
+        //     }
+        // });
+
+
+
     }
 
     const videoGridRef = createRef();
@@ -66,29 +187,53 @@ const SessionDash = () => {
 
     }, [roomId, videoGridRef])
 
+
+
     useEffect(() => {
-        if (!roomId || status !== "ready" || peerStatus !== 'ready')  return;
+        if (!roomId) return;
         // connect to server and all
 
         initPeer()
-    }, [roomId, status, peerStatus])
+    }, [roomId])
 
-    if (status !== "ready" || peerStatus !== 'ready' || fontAwesomeStatus !== 'ready') {
-        // TODO: replace with a nice loader
-        return (
-            <div>
-                Loading...
-            </div>
-        )
-    }
 
+
+    // if (fontAwesomeStatus !== 'ready') {
+    //     // TODO: replace with a nice loader
+    //     return (
+    //         <div>
+    //             Loading...
+    //         </div>
+    //     )
+    // }
 
 
 
     return (
         <div className={styles['session_container']}>
             <>
-                <div className={styles['header']}>
+
+                {userVideo && <video playsInline muted ref={userVideo} autoPlay />}
+                {partnerVideo && <video playsInline muted ref={partnerVideo} autoPlay />}
+
+                {/* {users.map((e, indx) => {
+                    const sockId=e.socket_id;
+
+                    console.log(partnerVideo[sockId])
+                    return (
+                        <>
+                            {!partnerVideo[sockId] ? 'NULLL' : partnerVideo[sockId].toString()}
+
+                            <video key={indx} playsInline muted ref={ef => partnerVideo[sockId] = ef} autoPlay />
+
+                        </>
+                    )
+                })} */}
+
+                SocketId: {socket.current && socket.current.id}
+                {users.map((user, indx) => <div key={indx}>{JSON.stringify(user)}</div>)}
+
+                {/* <div className={styles['header']}>
                     <div className={styles['logo']}>
                         <h3>Video Chat</h3>
                     </div>
@@ -130,7 +275,7 @@ const SessionDash = () => {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div> */}
             </>
 
         </div>
