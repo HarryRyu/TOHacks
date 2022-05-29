@@ -1,19 +1,24 @@
 
-const Express  =require('express');
-const cookie_parser  =require('cookie-parser');
-const authRoutes  =require('./routes/auth');
-const sessionRoutes  =require('./routes/session');
+const Express = require('express');
+const cookie_parser = require('cookie-parser');
+const authRoutes = require('./routes/auth');
+const sessionRoutes = require('./routes/session');
+const { ExpressPeerServer } = require("peer");
 
-const cors  =require('cors');
+
+const cors = require('cors');
 var jwt = require('jsonwebtoken');
 
 const app = Express()
 
-const dotenv=  require('dotenv')
+
+
+
+const dotenv = require('dotenv')
 
 dotenv.config()
 
-app.set('trust proxy', 1);
+// app.set('trust proxy', 1);
 
 // Configuring connect pg for persistent sessions
 app.use(
@@ -30,11 +35,11 @@ app.use(Express.json())
 
 // custom middleware to take the jsonwebtoken if any and build the user object
 app.use((req, res, next) => {
-    if(req.cookies.jwt_token){
-        const user=jwt.decode(req.cookies.jwt_token)
-        req.user=user
-    }else{
-        req.user=null
+    if (req.cookies.jwt_token) {
+        const user = jwt.decode(req.cookies.jwt_token)
+        req.user = user
+    } else {
+        req.user = null
     }
     next()
 })
@@ -62,6 +67,40 @@ app.get('/api/*', function (req, res) {
     });
 });
 
-app.listen(process.env.PORT ?? 8080, () => {
+
+const server = require("http").Server(app);
+
+
+const io = require("socket.io")(server, {
+    allowEIO3: true,
+    debug: true,
+    cors: {
+        origin: '*',
+    }
+});
+io.on("connection", (socket) => {
+    // console.log(socket)
+    socket.on("join-room", (roomId, userId, userName) => {
+      socket.join(roomId);
+      console.log(roomId, userId)
+    //   socket.to(roomId).broadcast.emit("user-connected", userId);
+    //   socket.on("message", (message) => {
+    //     io.to(roomId).emit("createMessage", message, userName);
+    //   });
+    });
+  });
+
+
+
+const peerServer = ExpressPeerServer(server, {
+    debug: true,
+});
+
+app.use("/peerjs", peerServer);
+
+
+
+
+server.listen(process.env.PORT ?? 8080, () => {
     console.log(`Server running at PORT:${process.env.PORT ?? 8080}`)
 })
