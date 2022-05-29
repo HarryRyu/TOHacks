@@ -19,7 +19,7 @@ const SessionDash = () => {
     // const peerStatus = useScript('https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js')
     const fontAwesomeStatus = useScript('https://kit.fontawesome.com/c939d0e917.js')
     const [peerInstance, setPeerInstance] = useState(null)
-    const [mySocketId, setMySocketId] = useState('null')
+    const [canShow, setCanShow] = useState(false)
 
     const [socketInstance, setSocketInstance] = useState(null)
     const [stream, setStream] = useState();
@@ -55,23 +55,23 @@ const SessionDash = () => {
 
         socket.current.on("connect", (data) => {
             socket.current.emit('join-session', { sessionId: roomId });
-            socket.current.on('start-session', (payload) => {
+            // socket.current.on('start-session', (payload) => {
+            //     setUsers(payload)
+            //     for (const user of payload) {
+            //         if(user.socket_id !== socket.current.id) connectPeer(user.socket_id)
+            //     }
+            // })
+
+            socket.current.on('allUsers', (payload) => {
                 setUsers(payload)
+                console.log('allu', payload)
+
                 for (const user of payload) {
-                    connectPeer(user.socket_id)
+                    if(user.socket_id !== socket.current.id) connectPeer(user.socket_id)
                 }
             })
 
-            socket.current.on('new-user', (payload) => {
-                console.log('new', payload.socket_id)
-                setUsers([...users, payload])
-            })
 
-            socket.current.on('user-left', (payload) => {
-                console.log('left', payload.socket_id)
-                delete partnerVideo[payload.socket_id]
-                setUsers(users.filter(e => e.socket_id !== payload.socket_id))
-            })
             // setReceivingCall(true);
 
             // setCaller(data.from);
@@ -79,8 +79,8 @@ const SessionDash = () => {
 
             // acceptCall(data.signal, data.caller)
 
-            socket.current.on('server-to-client-requesting-connection', (payload) => {
-                console.log(payload.requestorSocketId, ' is requesting', payload)
+            socket.current.on('hey', (payload) => {
+                console.log(payload.from, ' is requesting', payload)
                 const peer = new SimplePeer({
                     initiator: false,
                     trickle: false,
@@ -88,14 +88,17 @@ const SessionDash = () => {
                 });
                 peer.on("signal", data => {
                     //   accept the connection
-                    socket.current.emit("client-to-server-connection-accepted", { signal: data, requestorSocketId: payload.requestorSocketId })
+                    socket.current.emit("acceptCall", { signal: data, to: payload.from })
                 })
 
                 peer.on("stream", stream => {
-                    console.log('adding stream...')
-                    if (partnerVideo[payload.requestorSocketId]) {
-                        partnerVideo[payload.requestorSocketId].current.srcObject = stream;
-                    }
+                    setCanShow(true)
+
+                    console.log('adding stream...', partnerVideo.current, stream)
+                    if (partnerVideo.current) partnerVideo.current.srcObject = stream
+                    // if (partnerVideos.current[payload.from]) {
+                    //     partnerVideos.current[payload.from].current.srcObject = stream;
+                    // }
                 });
 
                 peer.signal(payload.signal);
@@ -107,27 +110,40 @@ const SessionDash = () => {
 
 
     const connectPeer = (peerSocketId) => {
-
         // setSocketInstance(socket)
 
         const peer = new SimplePeer({
             initiator: true,
-            trickle: false,
+            offerOptions: {
+                offerToReceiveVideo: true,
+                offerToReceiveAudio: true,
+            },
+            bundlePolicy: 'max-compat',
+            rtcpMuxPolicy: 'negotiate',
             config: {
 
                 iceServers: [
-                    {
-                        urls: "stun:numb.viagenie.ca",
-                        username: "sultan1640@gmail.com",
-                        credential: "98376683"
-                    },
-                    {
-                        urls: "turn:numb.viagenie.ca",
-                        username: "sultan1640@gmail.com",
-                        credential: "98376683"
-                    }
-                ]
+                    // {
+                    //   urls: "stun:openrelay.metered.ca:80",
+                    // },
+                    // {
+                    //   urls: "turn:openrelay.metered.ca:80",
+                    //   username: "openrelayproject",
+                    //   credential: "openrelayproject",
+                    // },
+                    // {
+                    //   urls: "turn:openrelay.metered.ca:443",
+                    //   username: "openrelayproject",
+                    //   credential: "openrelayproject",
+                    // },
+                    // {
+                    //   urls: "turn:openrelay.metered.ca:443?transport=tcp",
+                    //   username: "openrelayproject",
+                    //   credential: "openrelayproject",
+                    // },
+                ],
             },
+            trickle: true,
             stream: stream,
         });
 
@@ -135,33 +151,26 @@ const SessionDash = () => {
 
         peer.on("signal", data => {
             console.log('requesting connection to ', peerSocketId)
-            socket.current.emit("client-to-server-connect-with-user", { socketIdOfUserToCall: peerSocketId, signal: data })
+            socket.current.emit("callUser", { userToCall: peerSocketId, signalData: data, from: socket.current.id })
         })
 
         peer.on("stream", stream => {
             console.log('adding 2 stream...')
 
-            if (partnerVideo[peerSocketId]) {
-                partnerVideo[peerSocketId].current.srcObject = stream;
-            }
+            partnerVideo.current.srcObject = stream
+
+
+            // if (partnerVideos.current[peerSocketId]) {
+            //     partnerVideos.current[peerSocketId].current.srcObject = stream;
+            // }
         });
 
-        socket.current.on("server-to-client-connection-accepted", signal => {
+        socket.current.on("callAccepted", signal => {
             console.log('accepted connection', signal)
             peer.signal(signal);
         })
 
 
-        // peer.on("signal", data => {
-        //     socket.current.emit("connect-with-user", { userToCall: id, signalData: data, from: yourID })
-        // })
-
-
-        // peer.on("stream", stream => {
-        //     if (partnerVideo[peerSocketId]) {
-        //         partnerVideo[peerSocketId].current.srcObject = stream;
-        //     }
-        // });
 
 
 
@@ -208,32 +217,35 @@ const SessionDash = () => {
     // }
 
 
+    console.log()
 
     return (
         <div className={styles['session_container']}>
             <>
 
-                {userVideo && <video playsInline muted ref={userVideo} autoPlay />}
-                {partnerVideo && <video playsInline muted ref={partnerVideo} autoPlay />}
+                {/* {<video playsInline muted ref={partnerVideo} autoPlay />}
 
-                {/* {users.map((e, indx) => {
-                    const sockId=e.socket_id;
+                {false && users.map((e, indx) => {
+                    const sockId = e.socket_id;
+                    if (sockId === socket.current.id) return null;
 
-                    console.log(partnerVideo[sockId])
+                    console.log(partnerVideos.current[sockId])
                     return (
                         <>
-                            {!partnerVideo[sockId] ? 'NULLL' : partnerVideo[sockId].toString()}
+                            {!partnerVideos.current[sockId] ? 'NULLL' : partnerVideos.current[sockId].toString()}
 
-                            <video key={indx} playsInline muted ref={ef => partnerVideo[sockId] = ef} autoPlay />
+                            <video key={indx} playsInline muted ref={e => (partnerVideos.current[sockId] = e)} autoPlay />
 
                         </>
                     )
                 })} */}
 
+                {users.map((e, indx) => <button key={indx} onClick={() => connectPeer(e.socket_id)}>{e.socket_id}</button>)}
+
                 SocketId: {socket.current && socket.current.id}
                 {users.map((user, indx) => <div key={indx}>{JSON.stringify(user)}</div>)}
 
-                {/* <div className={styles['header']}>
+                <div className={styles['header']}>
                     <div className={styles['logo']}>
                         <h3>Video Chat</h3>
                     </div>
@@ -241,7 +253,10 @@ const SessionDash = () => {
                 <div className={styles['main']}>
                     <div className={styles['main__left']}>
                         <div className={styles['videos__group']}>
-                            <div id="video-grid" ref={videoGridRef}></div>
+                            <div id="video-grid">
+                                {<video muted ref={userVideo} autoPlay />}
+                                {<video muted ref={partnerVideo} autoPlay />}
+                            </div>
                         </div>
                         <div className={styles['options']}>
                             <div className={styles['options__left']}>
@@ -275,7 +290,7 @@ const SessionDash = () => {
                             </div>
                         </div>
                     </div>
-                </div> */}
+                </div>
             </>
 
         </div>
