@@ -39,8 +39,13 @@
 	height: 15px;
 }
 
+
 .btn {
 	@apply my-2 text-sm tracking-wider cursor-pointer bg-black px-3 py-2 text-white;
+}
+
+.btn-primary {
+	@apply my-2 text-sm tracking-wider cursor-pointer bg-white px-3 py-2 text-black;
 }
 
 

@@ -52,6 +52,30 @@ app.post('/create/', verifyToken, async (req, res) => {
 })
 
 
+app.post('/details/', verifyToken, async (req, res) => {
+    try {
+        const sessionUUID=req.body.sessionUUID;
+        if (!sessionUUID) {
+            throw new Error('sessionUUID is needed')
+        }
+
+
+        const response = await pool.query(`
+            SELECT *
+            FROM sessions
+            WHERE session_id=$1
+        `, [sessionUUID])
+
+        if(response.rowCount === 0) throw new Error('invalid UUID. Room doesn\'t exists')
+        res.send({
+            error: false,
+            data: response.rows[0]
+        })
+    } catch (err) {
+        res.send({ error: true, message: err.message })
+    }
+})
+
 /**
  * Get all of your sessions; 
  */

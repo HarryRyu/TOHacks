@@ -2,10 +2,9 @@ import axios from "axios";
 import { useRouter } from "next/router"
 import { createRef, useEffect, useRef, useState } from "react"
 import { toast } from "react-toastify";
-import { GET_SESSION_ACCESS_TOKEN } from "../../apiEndpoints";
+import { GET_SESSION_ACCESS_TOKEN, GET_SESSION_DETAILS } from "../../apiEndpoints";
 import useScript from "../../hooks/useScript"
 import styles from '../../styles/sessions[id].module.css'
-// import = require('twilio-video');
 
 
 
@@ -21,7 +20,9 @@ function addVideoStream(videoGrid, video, stream) {
 const SessionDash = () => {
     const status = useScript('https://sdk.twilio.com/js/video/releases/2.15.2/twilio-video.min.js')
     const fontAwesomeStatus = useScript('https://kit.fontawesome.com/c939d0e917.js')
-    
+    const [timeElapsed, setTimeElapsed] = useState(0)
+
+    const [sessionData, setSessionData] = useState(null)
     const router = useRouter();
 
     // const  [token, setToken]=useState('')
@@ -29,7 +30,22 @@ const SessionDash = () => {
 
 
     useEffect(() => {
-    }, []);
+        if (!roomId) return;
+
+        let id = setInterval(async () => {
+            try {
+
+                const data = await axios.post(GET_SESSION_DETAILS, { sessionUUID: roomId }, {
+                    withCredentials: true,
+                })
+                setSessionData(data.data.data)
+            } catch (err) {
+                toast(err.message)
+            }
+
+        }, 5000);
+        return () => clearInterval(id);
+    }, [roomId]);
 
 
     useEffect(() => {
@@ -67,22 +83,22 @@ const SessionDash = () => {
             // track.attach creates an HTMLVideoElement or HTMLAudioElement
             // (depending on the type of track) and adds the video or audio stream
             participantDiv.append(track.attach());
-          }
-        
-          // check if the trackPublication contains a `track` attribute. If it does,
-          // we are subscribed to this track. If not, we are not subscribed.
-          if (trackPublication.track) {
+        }
+
+        // check if the trackPublication contains a `track` attribute. If it does,
+        // we are subscribed to this track. If not, we are not subscribed.
+        if (trackPublication.track) {
             displayTrack(trackPublication.track);
-          }
-        
-          // listen for any new subscriptions to this track publication
-          trackPublication.on("subscribed", displayTrack);
+        }
+
+        // listen for any new subscriptions to this track publication
+        trackPublication.on("subscribed", displayTrack);
 
 
     }
 
 
-    const participantDivRef=useRef()
+    const participantDivRef = useRef()
     const handleConnectedParticipant = (participant) => {
 
         console.log(participant)
@@ -91,7 +107,7 @@ const SessionDash = () => {
         participantDiv.setAttribute("id", participant.identity);
         participantDiv.style = 'display: flex; flex-direction: column-reverse; align-items: center; font-weight: bolder;'
         const participantNameDiv = document.createElement("div");
-        participantNameDiv.innerText=`@${participant.identity.split('---')[1].replaceAll(' ', '')}`
+        participantNameDiv.innerText = `@${participant.identity.split('---')[1].replaceAll(' ', '')}`
         participantDiv.append(participantNameDiv)
         participantDivRef.current.appendChild(participantDiv);
 
@@ -113,17 +129,39 @@ const SessionDash = () => {
         return room;
     };
 
+
     const handleDisconnectedParticipant = (participant) => {
         // stop listening for this participant
         participant.removeAllListeners();
         // remove this participant's div from the page
         const participantDiv = document.getElementById(participant.identity);
         participantDiv.remove();
-      };
-      
+    };
+
+
+    const handleNewChallenge = () => {
+        toast('Select a pose with which you want to challenge your buddies. 😎 Get ready... Clicking snapshot in 7 seconds.', {
+            autoClose: 7000,
+            onClose: () => {
+                // TODO: Add Challenge
+                // let canvas = document.getElementById('screenshot-canvas');
+
+                // let video = document.getElementById('my-video');
+
+                // canvas.width = 1920;
+                // canvas.height = 1080;
+
+                // let ctx = canvas.getContext('2d');
+                // ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // let image = canvas.toDataURL('image/jpeg');
+            }
+        })
+    }
+
 
     return (
-        <div className={styles['session_container']} style={{color: 'white'}}>
+        <div className={styles['session_container']} style={{ color: 'white' }}>
             <>
 
 
@@ -153,13 +191,14 @@ const SessionDash = () => {
                 <div className={styles['header']}>
                     <div className={styles['logo']}>
                         <h3 className="text-2xl">Temporal Challenge Arena</h3>
+                        {sessionData && <h3 className="text-base">Room Name:  {sessionData.session_name}</h3>}
                     </div>
                 </div>
                 <div className={styles['main']}>
                     <div className={styles['main__left']}>
                         <div className={styles['videos__group']}>
                             <div id="video-grid">
-                            <div style={{display: 'flex', gap: '15px'}} ref={participantDivRef}>
+                                <div style={{ display: 'flex', gap: '15px' }} ref={participantDivRef}>
                                 </div>
 
                             </div>
@@ -182,8 +221,17 @@ const SessionDash = () => {
                     </div>
                     <div className={styles['main__right']}>
 
-                        <div style={{margin: '15px auto'}} className="text-sky-400">
+                        <div style={{ margin: '15px auto' }} className="text-sky-400">
                             In-Call Messages and Stats
+                        </div>
+
+                        <div style={{ margin: '15px auto' }}>
+                            {!(sessionData && sessionData.is_challenge_active) ? <div>
+                                <div className="text-xs text-red-400 text-center">No challenge active</div>
+                                <div className="btn-primary" onClick={handleNewChallenge}>Create a new challenge</div>
+                            </div> : <div>
+                                <div className="text-xs">Challenge is already active. Enjoy!</div>
+                            </div>}
                         </div>
                         <div className={styles['main__chat_window']}>
                             <div className={styles['messages']}></div>
