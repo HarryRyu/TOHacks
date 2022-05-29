@@ -1,9 +1,13 @@
+import axios from "axios";
 import { useRouter } from "next/router"
 import { createRef, useEffect, useRef, useState } from "react"
+import { toast } from "react-toastify";
+import { GET_SESSION_ACCESS_TOKEN } from "../../apiEndpoints";
 import useScript from "../../hooks/useScript"
 import styles from '../../styles/sessions[id].module.css'
-import SimplePeer from "simple-peer"
-import io from "socket.io-client"
+// import = require('twilio-video');
+
+
 
 function addVideoStream(videoGrid, video, stream) {
     video.srcObject = stream;
@@ -15,213 +19,114 @@ function addVideoStream(videoGrid, video, stream) {
 
 
 const SessionDash = () => {
-    // const status = useScript('https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js')
-    // const peerStatus = useScript('https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js')
+    const status = useScript('https://sdk.twilio.com/js/video/releases/2.15.2/twilio-video.min.js')
     const fontAwesomeStatus = useScript('https://kit.fontawesome.com/c939d0e917.js')
-    const [peerInstance, setPeerInstance] = useState(null)
-    const [canShow, setCanShow] = useState(false)
-
-    const [socketInstance, setSocketInstance] = useState(null)
-    const [stream, setStream] = useState();
-    const userVideo = useRef();
-    const partnerVideos = useRef({});
-    const partnerVideo = useRef();
-
-    const [users, setUsers] = useState([]);
-
-    const socket = useRef();
-
-
+    
     const router = useRouter();
 
+    // const  [token, setToken]=useState('')
     const { id: roomId } = router.query
 
 
     useEffect(() => {
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
-            setStream(stream);
-            if (userVideo.current) {
-                userVideo.current.srcObject = stream;
-            }
-        })
-
     }, []);
 
 
-    const initPeer = () => {
+    useEffect(() => {
+        if (!roomId || status !== 'ready') return;
 
-        socket.current = io("localhost:8080", { transports: ['websocket'], withCredentials: true, });
+        // GET access token to join the room
 
+        axios.post(GET_SESSION_ACCESS_TOKEN, { sessionUUID: roomId }, { withCredentials: true }).then(async e => {
+            console.log(e.data)
 
-        socket.current.on("connect", (data) => {
-            socket.current.emit('join-session', { sessionId: roomId });
-            // socket.current.on('start-session', (payload) => {
-            //     setUsers(payload)
-            //     for (const user of payload) {
-            //         if(user.socket_id !== socket.current.id) connectPeer(user.socket_id)
-            //     }
-            // })
+            if (e.data.error) {
+                toast(e.data.message, { type: 'error' })
+            } else {
+                // setToken(e.data.token)
+                const room = await joinVideoRoom(e.data.token)
+                console.log();
+                handleConnectedParticipant(room.localParticipant)
+                room.participants.forEach(handleConnectedParticipant);
+                room.on("participantConnected", handleConnectedParticipant);
 
-            socket.current.on('allUsers', (payload) => {
-                setUsers(payload)
-                console.log('allu', payload)
-
-                for (const user of payload) {
-                    if(user.socket_id !== socket.current.id) connectPeer(user.socket_id)
-                }
-            })
-
-
-            // setReceivingCall(true);
-
-            // setCaller(data.from);
-            // setCallerSignal(data.signal);
-
-            // acceptCall(data.signal, data.caller)
-
-            socket.current.on('hey', (payload) => {
-                console.log(payload.from, ' is requesting', payload)
-                const peer = new SimplePeer({
-                    initiator: false,
-                    trickle: false,
-                    stream: stream,
-                });
-                peer.on("signal", data => {
-                    //   accept the connection
-                    socket.current.emit("acceptCall", { signal: data, to: payload.from })
-                })
-
-                peer.on("stream", stream => {
-                    setCanShow(true)
-
-                    console.log('adding stream...', partnerVideo.current, stream)
-                    if (partnerVideo.current) partnerVideo.current.srcObject = stream
-                    // if (partnerVideos.current[payload.from]) {
-                    //     partnerVideos.current[payload.from].current.srcObject = stream;
-                    // }
-                });
-
-                peer.signal(payload.signal);
-            })
+                room.on("participantDisconnected", handleDisconnectedParticipant);
+            }
         })
+
+        // if error then show a toast
+
+
+    }, [roomId, status])
+
+
+    const handleTrackPublication = (trackPublication, participant) => {
+        function displayTrack(track) {
+            // append this track to the participant's div and render it on the page
+            const participantDiv = document.getElementById(participant.identity);
+            // track.attach creates an HTMLVideoElement or HTMLAudioElement
+            // (depending on the type of track) and adds the video or audio stream
+            participantDiv.append(track.attach());
+          }
+        
+          // check if the trackPublication contains a `track` attribute. If it does,
+          // we are subscribed to this track. If not, we are not subscribed.
+          if (trackPublication.track) {
+            displayTrack(trackPublication.track);
+          }
+        
+          // listen for any new subscriptions to this track publication
+          trackPublication.on("subscribed", displayTrack);
 
 
     }
 
 
-    const connectPeer = (peerSocketId) => {
-        // setSocketInstance(socket)
+    const participantDivRef=useRef()
+    const handleConnectedParticipant = (participant) => {
 
-        const peer = new SimplePeer({
-            initiator: true,
-            offerOptions: {
-                offerToReceiveVideo: true,
-                offerToReceiveAudio: true,
-            },
-            bundlePolicy: 'max-compat',
-            rtcpMuxPolicy: 'negotiate',
-            config: {
+        console.log(participant)
+        // create a div for this participant's tracks
+        const participantDiv = document.createElement("div");
+        participantDiv.setAttribute("id", participant.identity);
+        participantDiv.style = 'display: flex; flex-direction: column-reverse; align-items: center; font-weight: bolder;'
+        const participantNameDiv = document.createElement("div");
+        participantNameDiv.innerText=`@${participant.identity.split('---')[1].replaceAll(' ', '')}`
+        participantDiv.append(participantNameDiv)
+        participantDivRef.current.appendChild(participantDiv);
 
-                iceServers: [
-                    // {
-                    //   urls: "stun:openrelay.metered.ca:80",
-                    // },
-                    // {
-                    //   urls: "turn:openrelay.metered.ca:80",
-                    //   username: "openrelayproject",
-                    //   credential: "openrelayproject",
-                    // },
-                    // {
-                    //   urls: "turn:openrelay.metered.ca:443",
-                    //   username: "openrelayproject",
-                    //   credential: "openrelayproject",
-                    // },
-                    // {
-                    //   urls: "turn:openrelay.metered.ca:443?transport=tcp",
-                    //   username: "openrelayproject",
-                    //   credential: "openrelayproject",
-                    // },
-                ],
-            },
-            trickle: true,
-            stream: stream,
+        // iterate through the participant's published tracks and
+        // call `handleTrackPublication` on them
+        participant.tracks.forEach((trackPublication) => {
+            handleTrackPublication(trackPublication, participant);
         });
 
+        // listen for any new track publications
+        participant.on("trackPublished", handleTrackPublication);
+    };
 
-
-        peer.on("signal", data => {
-            console.log('requesting connection to ', peerSocketId)
-            socket.current.emit("callUser", { userToCall: peerSocketId, signalData: data, from: socket.current.id })
-        })
-
-        peer.on("stream", stream => {
-            console.log('adding 2 stream...')
-
-            partnerVideo.current.srcObject = stream
-
-
-            // if (partnerVideos.current[peerSocketId]) {
-            //     partnerVideos.current[peerSocketId].current.srcObject = stream;
-            // }
+    const joinVideoRoom = async (token) => {
+        // join the video room with the Access Token and the given room name
+        const room = await Twilio.Video.connect(token, {
+            room: roomId,
         });
+        return room;
+    };
 
-        socket.current.on("callAccepted", signal => {
-            console.log('accepted connection', signal)
-            peer.signal(signal);
-        })
-
-
-
-
-
-    }
-
-    const videoGridRef = createRef();
-    useEffect(() => {
-        if (!roomId || !videoGridRef || !videoGridRef.current) return;
-
-        let myVideoStream;
-        const videoGrid = videoGridRef.current;
-
-        const myVideo = document.createElement("video");
-        myVideo.muted = true;
-        navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: true,
-        })
-            .then((stream) => {
-                myVideoStream = stream;
-                addVideoStream(videoGrid, myVideo, stream);
-            });
-
-    }, [roomId, videoGridRef])
-
-
-
-    useEffect(() => {
-        if (!roomId) return;
-        // connect to server and all
-
-        initPeer()
-    }, [roomId])
-
-
-
-    // if (fontAwesomeStatus !== 'ready') {
-    //     // TODO: replace with a nice loader
-    //     return (
-    //         <div>
-    //             Loading...
-    //         </div>
-    //     )
-    // }
-
-
-    console.log()
+    const handleDisconnectedParticipant = (participant) => {
+        // stop listening for this participant
+        participant.removeAllListeners();
+        // remove this participant's div from the page
+        const participantDiv = document.getElementById(participant.identity);
+        participantDiv.remove();
+      };
+      
 
     return (
-        <div className={styles['session_container']}>
+        <div className={styles['session_container']} style={{color: 'white'}}>
             <>
+
+
 
                 {/* {<video playsInline muted ref={partnerVideo} autoPlay />}
 
@@ -240,22 +145,23 @@ const SessionDash = () => {
                     )
                 })} */}
 
-                {users.map((e, indx) => <button key={indx} onClick={() => connectPeer(e.socket_id)}>{e.socket_id}</button>)}
+                {/* {users.map((e, indx) => <button key={indx} onClick={() => connectPeer(e.socket_id)}>{e.socket_id}</button>)} */}
 
-                SocketId: {socket.current && socket.current.id}
-                {users.map((user, indx) => <div key={indx}>{JSON.stringify(user)}</div>)}
+                {/* SocketId: {socket.current && socket.current.id} */}
+                {/* {users.map((user, indx) => <div key={indx}>{JSON.stringify(user)}</div>)} */}
 
                 <div className={styles['header']}>
                     <div className={styles['logo']}>
-                        <h3>Video Chat</h3>
+                        <h3 className="text-2xl">Temporal Challenge Arena</h3>
                     </div>
                 </div>
                 <div className={styles['main']}>
                     <div className={styles['main__left']}>
                         <div className={styles['videos__group']}>
                             <div id="video-grid">
-                                {<video muted ref={userVideo} autoPlay />}
-                                {<video muted ref={partnerVideo} autoPlay />}
+                            <div style={{display: 'flex', gap: '15px'}} ref={participantDivRef}>
+                                </div>
+
                             </div>
                         </div>
                         <div className={styles['options']}>
@@ -275,6 +181,10 @@ const SessionDash = () => {
                         </div>
                     </div>
                     <div className={styles['main__right']}>
+
+                        <div style={{margin: '15px auto'}} className="text-sky-400">
+                            In-Call Messages and Stats
+                        </div>
                         <div className={styles['main__chat_window']}>
                             <div className={styles['messages']}></div>
                         </div>

@@ -9,7 +9,8 @@ const { verifyToken } = require('../auth/helpers');
 const pool = require('../db/dbPool');
 const Joi = require('joi')
 const app = Router()
-const uuid = require('uuid')
+const uuid = require('uuid');
+const { getAccessToken, findOrCreateRoom } = require('../twilio');
 
 
 const newSessionPayloadSchema = Joi.object({
@@ -26,6 +27,10 @@ app.post('/create/', verifyToken, async (req, res) => {
             throw new Error(error)
         }
 
+        const sessionId=uuid.v4()
+
+        await findOrCreateRoom(sessionId)
+
         const response = await pool.query(`
             INSERT INTO sessions(
                 session_id,
@@ -35,7 +40,7 @@ app.post('/create/', verifyToken, async (req, res) => {
                 is_challenge_active,
                 challenge_pose_image_location
             )VALUES($1,$2,$3,$4,$5,$6) RETURNING *;
-        `, [uuid.v4(), value.session_name, req.user.user_id, new Date(), false, null])
+        `, [sessionId, value.session_name, req.user.user_id, new Date(), false, null])
 
         res.send({
             error: false,
@@ -61,6 +66,28 @@ app.post('/create/', verifyToken, async (req, res) => {
 /**
  * Main
  */
+
+
+
+app.post("/get-access-token", verifyToken, async (req, res) => {
+    try {
+        const { sessionUUID } = req.body;
+        // return 400 if the request has an empty body or no roomName
+        if (!req.body || !sessionUUID) {
+            throw new Error("Must include sessionUUID argument.")
+        }
+        // it's expected that room is already created
+
+        console.log(req.user.user_id)
+        // generate an Access Token for a participant in this room
+        const token = await getAccessToken(sessionUUID, req.user.user_id, `${req.user.first_name} ${req.user.last_name}`);
+        res.send({
+            token: token,
+        });
+    } catch (err) {
+        res.send({ error: true, message: err.message })
+    }
+});
 
 
 

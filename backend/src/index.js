@@ -78,98 +78,99 @@ app.get('/api/*', function (req, res) {
 const server = require("http").Server(app);
 
 
-const io = require("socket.io")(server, {
-    allowEIO3: true,
-    debug: true,
-    cors: {
-        origin: process.env.CLIENT_URL ?? '/',
-        credentials: true,
-    }
-});
+
+// const io = require("socket.io")(server, {
+//     allowEIO3: true,
+//     debug: true,
+//     cors: {
+//         origin: process.env.CLIENT_URL ?? '/',
+//         credentials: true,
+//     }
+// });
 
 const usersBySession = {};
 const sessionBySocket = {}
 
-io.on("connection", (socket) => {
+// io.on("connection", (socket) => {
 
-    // if (!users[socket.id]) {
-    //     users[socket.id] = socket.id;
-    // }
+//     // if (!users[socket.id]) {
+//     //     users[socket.id] = socket.id;
+//     // }
 
-    socket.on("join-session", (payload) => {
-        const { sessionId } = payload;
-        if (socket.handshake.headers.cookie) {
-            const jwt_token = cookie.parse(socket.handshake.headers.cookie).jwt_token;
-            const user = jwt.decode(jwt_token)
-            if (!user) throw new Error('jwt token expired')
-            if (!usersBySession[sessionId]) usersBySession[sessionId] = [];
-            user['socket_id'] = socket.id
-
-
-
-            usersBySession[sessionId].push(user)
-            sessionBySocket[socket.id] = sessionId
-
-            for (const user of usersBySession[sessionId]) {
-                io.to(user.socket_id).emit("newUser", usersBySession[sessionId]);
-            }
-
-
-            socket.on('disconnect', () => {
-                console.log('disconnect', socket)
-                delete sessionBySocket[socket.id];
-                usersBySession[sessionId] = usersBySession[sessionId].filter(e => e.socket_id !== socket.id);
-
-                for (const sock of Object.entries(sessionBySocket)) {
-                    const sessionId = sock[1]
-                    io.to(sock[0]).emit("allUsers", usersBySession[sessionId]);
-                }
-            })
-
-            socket.on('callUser', (data) => {
-                console.log('requ', data, socket.id)
-                io.to(data.userToCall).emit('hey', { signal: data.signalData, from: data.from });
-
-            })
-
-            socket.on('acceptCall', (data) => {
-                console.log('accc', data, socket.id)
-
-                io.to(data.to).emit('callAccepted', data.signal);
-            })
-
-        } else {
-            // TODO: Invalid request by user
-            throw new Error('Invalid request')
-        }
-    });
-
-    // socket.emit("yourID", socket.id);
+//     socket.on("join-session", (payload) => {
+//         const { sessionId } = payload;
+//         if (socket.handshake.headers.cookie) {
+//             const jwt_token = cookie.parse(socket.handshake.headers.cookie).jwt_token;
+//             const user = jwt.decode(jwt_token)
+//             if (!user) throw new Error('jwt token expired')
+//             if (!usersBySession[sessionId]) usersBySession[sessionId] = [];
+//             user['socket_id'] = socket.id
 
 
 
+//             usersBySession[sessionId].push(user)
+//             sessionBySocket[socket.id] = sessionId
+
+//             for (const user of usersBySession[sessionId]) {
+//                 io.to(user.socket_id).emit("newUser", usersBySession[sessionId]);
+//             }
 
 
-    // socket.on("callUser", (data) => {
-    //     io.to(data.userToCall).emit('hey', { signal: data.signalData, from: data.from });
-    // })
+//             socket.on('disconnect', () => {
+//                 console.log('disconnect', socket)
+//                 delete sessionBySocket[socket.id];
+//                 usersBySession[sessionId] = usersBySession[sessionId].filter(e => e.socket_id !== socket.id);
 
-    // socket.on("acceptCall", (data) => {
-    //     io.to(data.to).emit('callAccepted', data.signal);
-    // })
+//                 for (const sock of Object.entries(sessionBySocket)) {
+//                     const sessionId = sock[1]
+//                     io.to(sock[0]).emit("allUsers", usersBySession[sessionId]);
+//                 }
+//             })
+
+//             socket.on('callUser', (data) => {
+//                 console.log('requ', data, socket.id)
+//                 io.to(data.userToCall).emit('hey', { signal: data.signalData, from: data.from });
+
+//             })
+
+//             socket.on('acceptCall', (data) => {
+//                 console.log('accc', data, socket.id)
+
+//                 io.to(data.to).emit('callAccepted', data.signal);
+//             })
+
+//         } else {
+//             // TODO: Invalid request by user
+//             throw new Error('Invalid request')
+//         }
+//     });
+
+//     // socket.emit("yourID", socket.id);
 
 
 
 
-    // socket.on("join-room", (roomId, userId, userName) => {
-    //     socket.join(roomId);
-    //     console.log(roomId, userId)
-    //     //   socket.to(roomId).broadcast.emit("user-connected", userId);
-    //     //   socket.on("message", (message) => {
-    //     //     io.to(roomId).emit("createMessage", message, userName);
-    //     //   });
-    // });
-});
+
+//     // socket.on("callUser", (data) => {
+//     //     io.to(data.userToCall).emit('hey', { signal: data.signalData, from: data.from });
+//     // })
+
+//     // socket.on("acceptCall", (data) => {
+//     //     io.to(data.to).emit('callAccepted', data.signal);
+//     // })
+
+
+
+
+//     // socket.on("join-room", (roomId, userId, userName) => {
+//     //     socket.join(roomId);
+//     //     console.log(roomId, userId)
+//     //     //   socket.to(roomId).broadcast.emit("user-connected", userId);
+//     //     //   socket.on("message", (message) => {
+//     //     //     io.to(roomId).emit("createMessage", message, userName);
+//     //     //   });
+//     // });
+// });
 
 
 
