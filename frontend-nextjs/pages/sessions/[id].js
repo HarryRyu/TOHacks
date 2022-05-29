@@ -2,7 +2,7 @@ import axios from "axios";
 import { useRouter } from "next/router"
 import { createRef, useEffect, useRef, useState } from "react"
 import { toast } from "react-toastify";
-import { GET_SESSION_ACCESS_TOKEN, GET_SESSION_DETAILS } from "../../apiEndpoints";
+import { END_CHALLENGE, GET_SESSION_ACCESS_TOKEN, GET_SESSION_DETAILS, SERVER_URL } from "../../apiEndpoints";
 import useScript from "../../hooks/useScript"
 import styles from '../../styles/sessions[id].module.css'
 
@@ -159,6 +159,17 @@ const SessionDash = () => {
         })
     }
 
+    const handleEndChallenge = async () => {
+        try {
+            const res = await axios.post(END_CHALLENGE, { session_id: sessionData.session_id, challenge_id: sessionData.current_active_challenge_id }, { withCredentials: true })
+            if (res.data.error) throw new Error(res.data.message);
+
+            toast('Challenge successfully completed. Results will be compiled soon! Keep playing..')
+        } catch (err) {
+            toast(err.message, { type: 'error' })
+        }
+    }
+
 
     return (
         <div className={styles['session_container']} style={{ color: 'white' }}>
@@ -196,13 +207,29 @@ const SessionDash = () => {
                 </div>
                 <div className={styles['main']}>
                     <div className={styles['main__left']}>
-                        <div className={styles['videos__group']}>
-                            <div id="video-grid">
-                                <div style={{ display: 'flex', gap: '15px' }} ref={participantDivRef}>
-                                </div>
 
-                            </div>
+                        <div className={styles['container-dark']} ref={participantDivRef}>
+
+                            {sessionData &&
+                                <>
+                                    {sessionData.current_active_challenge_id ?
+
+                                        <div className={`flex flex-col gap-1 ${styles['divvvv']}`}>
+                                            <img className='w-full h-auto rounded-lg' src={`${SERVER_URL}/${sessionData.challenge_pose_image_location}`} />
+                                            <div className="text-yellow-500 font-black">Current Challenge by: {sessionData.challenge_creator_name}</div>
+                                        </div>
+
+                                        : null}
+
+                                </>
+                            }
+
+                            {/* <div id="video-grid" ></div> */}
+
                         </div>
+
+                        {!sessionData && <div>Loading...</div>}
+
                         <div className={styles['options']}>
                             <div className={styles['options__left']}>
                                 <div id="stopVideo" className={styles['options__button']}>
@@ -218,19 +245,26 @@ const SessionDash = () => {
                                 </div>
                             </div>
                         </div>
+
                     </div>
+
+
                     <div className={styles['main__right']}>
 
                         <div style={{ margin: '15px auto' }} className="text-sky-400">
                             In-Call Messages and Stats
                         </div>
 
-                        <div style={{ margin: '15px auto' }}>
-                            {!(sessionData && sessionData.is_challenge_active) ? <div>
-                                <div className="text-xs text-red-400 text-center">No challenge active</div>
+                        <div style={{ margin: '15px auto', textAlign: 'center' }}>
+                            {!(sessionData && sessionData.current_active_challenge_id) ? <div>
+                                <div className="text-xs text-red-400">No challenge active</div>
                                 <div className="btn-primary" onClick={handleNewChallenge}>Create a new challenge</div>
                             </div> : <div>
                                 <div className="text-xs">Challenge is already active. Enjoy!</div>
+                                {sessionData.is_challenge_owner ?
+                                    < div className="btn-basic bg-red-500" onClick={handleEndChallenge}>End Current Challenge</div> :
+                                    <div className="text-xs text-gray-400 text-center">Note: Only the creator of challenge can end it. </div>
+                                }
                             </div>}
                         </div>
                         <div className={styles['main__chat_window']}>
@@ -251,7 +285,7 @@ const SessionDash = () => {
                 </div>
             </>
 
-        </div>
+        </div >
     )
 }
 

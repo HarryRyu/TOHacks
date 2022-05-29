@@ -5,7 +5,6 @@ dotenv.config()
  * middleware to verify the auth status
  */
 const verifyToken = async (req, res, next) => {
-    console.log(req.user)
     if (req.user) {
         return next();
     }

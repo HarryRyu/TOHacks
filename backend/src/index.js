@@ -18,6 +18,7 @@ const app = Express()
 
 const dotenv = require('dotenv');
 const { verifyToken } = require('./auth/helpers');
+const pool = require('./db/dbPool');
 
 dotenv.config()
 
@@ -61,6 +62,8 @@ app.get('/api/', (req, res) => {
     })
 })
 
+
+app.use('/api/uploads/', Express.static('uploads/'))
 
 
 
@@ -178,3 +181,4 @@ const sessionBySocket = {}
 server.listen(process.env.PORT ?? 8080, () => {
     console.log(`Server running at PORT:${process.env.PORT ?? 8080}`)
 })
+

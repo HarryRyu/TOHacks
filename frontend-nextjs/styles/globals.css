@@ -40,6 +40,10 @@
 }
 
 
+.btn-basic {
+	@apply my-2 text-sm tracking-wider cursor-pointer  px-3 py-2 text-white;
+}
+
 .btn {
 	@apply my-2 text-sm tracking-wider cursor-pointer bg-black px-3 py-2 text-white;
 }
