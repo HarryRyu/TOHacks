@@ -42,12 +42,14 @@
 }
 
 .container-dark{
+  padding-top: 10px;
   background: var(--main-dark);
   height: 100%;
-  display: grid;
+  display: flex;
+  gap: 2px;
   text-align: center;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr) );
-
+  font-weight: bolder;
+  flex-wrap: wrap;
 }
 
 .videos__group {
@@ -62,7 +64,7 @@
 }
 
 
-.container-dark video, .container-dark img {
+.container-dark video, .container-dark img, .container-dark canvas {
   height: 300px;
   border-radius: 1rem;
   margin: 0.5rem;

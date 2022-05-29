@@ -2,7 +2,7 @@ import axios from "axios";
 import { useRouter } from "next/router"
 import { createRef, useEffect, useRef, useState } from "react"
 import { toast } from "react-toastify";
-import { END_CHALLENGE, GET_SESSION_ACCESS_TOKEN, GET_SESSION_DETAILS, SERVER_URL } from "../../apiEndpoints";
+import { END_CHALLENGE, GET_SESSION_ACCESS_TOKEN, GET_SESSION_DETAILS, SERVER_URL, START_CHALLENGE } from "../../apiEndpoints";
 import useScript from "../../hooks/useScript"
 import styles from '../../styles/sessions[id].module.css'
 
@@ -20,6 +20,9 @@ function addVideoStream(videoGrid, video, stream) {
 const SessionDash = () => {
     const status = useScript('https://sdk.twilio.com/js/video/releases/2.15.2/twilio-video.min.js')
     const fontAwesomeStatus = useScript('https://kit.fontawesome.com/c939d0e917.js')
+
+    const script1 = useScript('https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.6/dat.gui.min.js')
+    const script2 = useScript('https://cdnjs.cloudflare.com/ajax/libs/stats.js/r16/Stats.min.js')
     const [timeElapsed, setTimeElapsed] = useState(0)
 
     const [sessionData, setSessionData] = useState(null)
@@ -105,7 +108,7 @@ const SessionDash = () => {
         // create a div for this participant's tracks
         const participantDiv = document.createElement("div");
         participantDiv.setAttribute("id", participant.identity);
-        participantDiv.style = 'display: flex; flex-direction: column-reverse; align-items: center; font-weight: bolder;'
+        participantDiv.style = 'display: flex; flex-direction: column; align-items: center; justify-content: flex-start;'
         const participantNameDiv = document.createElement("div");
         participantNameDiv.innerText = `@${participant.identity.split('---')[1].replaceAll(' ', '')}`
         participantDiv.append(participantNameDiv)
@@ -141,8 +144,9 @@ const SessionDash = () => {
 
     const handleNewChallenge = () => {
         toast('Select a pose with which you want to challenge your buddies. 😎 Get ready... Clicking snapshot in 7 seconds.', {
-            autoClose: 7000,
+            autoClose: 1000,
             onClose: () => {
+                takepicture()
                 // TODO: Add Challenge
                 // let canvas = document.getElementById('screenshot-canvas');
 
@@ -171,64 +175,146 @@ const SessionDash = () => {
     }
 
 
+    function DataURIToBlob(dataURI) {
+        const splitDataURI = dataURI.split(',')
+        const byteString = splitDataURI[0].indexOf('base64') >= 0 ? atob(splitDataURI[1]) : decodeURI(splitDataURI[1])
+        const mimeString = splitDataURI[0].split(':')[1].split(';')[0]
+
+        const ia = new Uint8Array(byteString.length)
+        for (let i = 0; i < byteString.length; i++)
+            ia[i] = byteString.charCodeAt(i)
+
+        return new Blob([ia], { type: mimeString })
+    }
+
+
+    async function takepicture() {
+        var video = document.getElementsByTagName('video');
+        var canvas = document.getElementById('canvas');
+        var width = 100
+        var height = 100
+        var context = canvas.getContext('2d');
+
+
+        if (width && height) {
+            canvas.width = width;
+            canvas.height = height;
+            context.drawImage(video[0], 0, 0, width, height);
+
+            var data = canvas.toDataURL('image/png');
+
+            console.log(data)
+            photo.setAttribute('src', data);
+
+            var bodyFormData = new FormData();
+
+            bodyFormData.append('session_id', roomId);
+            bodyFormData.append('pose', DataURIToBlob(data));
+            try {
+                const response = await axios.post(START_CHALLENGE, bodyFormData, { withCredentials: true })
+                if (response.data.error) throw new Error(response.data.message)
+                console.log(response.data)
+            } catch (err) {
+                toast(err.message, { type: 'error' })
+            }
+        } else {
+            clearphoto();
+        }
+    }
+
+
     return (
+
         <div className={styles['session_container']} style={{ color: 'white' }}>
             <>
 
-
-
-                {/* {<video playsInline muted ref={partnerVideo} autoPlay />}
-
-                {false && users.map((e, indx) => {
-                    const sockId = e.socket_id;
-                    if (sockId === socket.current.id) return null;
-
-                    console.log(partnerVideos.current[sockId])
-                    return (
-                        <>
-                            {!partnerVideos.current[sockId] ? 'NULLL' : partnerVideos.current[sockId].toString()}
-
-                            <video key={indx} playsInline muted ref={e => (partnerVideos.current[sockId] = e)} autoPlay />
-
-                        </>
-                    )
-                })} */}
-
-                {/* {users.map((e, indx) => <button key={indx} onClick={() => connectPeer(e.socket_id)}>{e.socket_id}</button>)} */}
-
-                {/* SocketId: {socket.current && socket.current.id} */}
-                {/* {users.map((user, indx) => <div key={indx}>{JSON.stringify(user)}</div>)} */}
-
-                <div className={styles['header']}>
-                    <div className={styles['logo']}>
-                        <h3 className="text-2xl">Temporal Challenge Arena</h3>
-                        {sessionData && <h3 className="text-base">Room Name:  {sessionData.session_name}</h3>}
+                <header className="text-gray-600 body-font">
+                    <div className="container mx-auto flex flex-wrap p-5 flex-col md:flex-row items-center">
+                        <nav className="flex lg:w-2/5 flex-wrap items-center text-base md:ml-auto">
+                            <a href="/index" className="mr-5 hover:text-gray-900">
+                                Home
+                            </a>
+                            <a href="/create" className="mr-5 hover:text-gray-900">
+                                Create a Room
+                            </a>
+                        </nav>
+                        <a className="flex order-first lg:order-none lg:w-1/5 title-font font-medium items-center text-gray-900 lg:items-center lg:justify-center mb-4 md:mb-0">
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                className="w-10 h-10 text-white p-2 bg-yellow-500 rounded-full"
+                                viewBox="0 0 24 24"
+                            >
+                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                            </svg>
+                            <span className="ml-3 text-xl">TOHacks 2022</span>
+                        </a>
+                        <div className="lg:w-2/5 inline-flex lg:justify-end ml-5 lg:ml-0">
+                            <a href="/join">
+                                <button className="inline-flex items-center bg-yellow-100 border-0 py-1 px-3 focus:outline-none hover:bg-yellow-200 rounded text-base mt-4 md:mt-0">
+                                    Join a Room
+                                    <svg
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        className="w-4 h-4 ml-1"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path d="M5 12h14M12 5l7 7-7 7" />
+                                    </svg>
+                                </button>
+                            </a>
+                        </div>
                     </div>
-                </div>
+                </header>
+
+                <hr />
+
+
                 <div className={styles['main']}>
                     <div className={styles['main__left']}>
 
-                        <div className={styles['container-dark']} ref={participantDivRef}>
+                        <div className={styles['container-dark']}>
+                            <div>
+                                <div>Latest Local Snapshot</div>
+                                <canvas id="canvas" style={{ backgroundColor: 'black', borderRadius: '15px', }}>
+                                    <div className="output">
+                                        <img id="photo" alt="The screen capture will appear in this box."></img>
+                                    </div>
+                                </canvas>
+                            </div>
+
+
 
                             {sessionData &&
                                 <>
                                     {sessionData.current_active_challenge_id ?
 
                                         <div className={`flex flex-col gap-1 ${styles['divvvv']}`}>
-                                            <img className='w-full h-auto rounded-lg' src={`${SERVER_URL}/${sessionData.challenge_pose_image_location}`} />
                                             <div className="text-yellow-500 font-black">Current Challenge by: {sessionData.challenge_creator_name}</div>
+                                            <img className='w-full h-auto rounded-lg' src={`${SERVER_URL}/${sessionData.challenge_pose_image_location}`} />
                                         </div>
 
                                         : null}
 
                                 </>
+
+
                             }
 
-                            {/* <div id="video-grid" ></div> */}
+                            <div id="video-grid" ref={participantDivRef} ></div>
 
                         </div>
 
                         {!sessionData && <div>Loading...</div>}
+
+
 
                         <div className={styles['options']}>
                             <div className={styles['options__left']}>
